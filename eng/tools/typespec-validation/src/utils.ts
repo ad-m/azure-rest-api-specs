@@ -1,58 +1,106 @@
-import { access, stat } from "fs/promises";
-import { exec } from "child_process";
-import defaultPath, { PlatformPath } from "path";
-import { TsvHost } from "./tsv-host.js";
+import { execNodeBin, isExecError } from "@azure-tools/specs-shared/exec";
+import type { ILogger } from "@azure-tools/specs-shared/logger";
+import { getRootFolder } from "@azure-tools/specs-shared/simple-git";
+import {
+  getSuppressions as getSuppressionsImpl,
+  type Suppression,
+} from "@azure-tools/suppressions";
+import { access, readdir, readFile } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "pathe";
+import { simpleGit } from "simple-git";
+import { context } from "./index.ts";
+import { supportsColor } from "./diagnostics.ts";
+import type { CommandOutput } from "./command-output.ts";
 
-export async function runCmd(cmd: string, cwd: string) {
-  console.log(`run command:${cmd}`);
-  const { err, stdout, stderr } = (await new Promise((res) =>
-    exec(
-      cmd,
-      { encoding: "utf8", maxBuffer: 1024 * 1024 * 64, cwd: cwd },
-      (err: unknown, stdout: unknown, stderr: unknown) =>
-        res({ err: err, stdout: stdout, stderr: stderr }),
-    ),
-  )) as any;
-
-  return [err, stdout, stderr] as [Error | null, string, string];
+// Return command failures to the validation rule along with captured output.
+export async function runNodeBin(
+  packageName: string,
+  args: [string, ...string[]],
+  logger: ILogger,
+  cwd?: string,
+): Promise<CommandOutput> {
+  const env = { ...process.env };
+  if (supportsColor()) {
+    delete env.NO_COLOR;
+    env.FORCE_COLOR = "1";
+  } else {
+    delete env.FORCE_COLOR;
+    env.NO_COLOR = "1";
+  }
+  logger.debug(`runNodeBin(${JSON.stringify(packageName)}, ${JSON.stringify(args)})`);
+  try {
+    const { stdout, stderr } = await execNodeBin(packageName, args, {
+      // The calling rule owns captured output, including errors; do not log it twice.
+      env,
+      maxBuffer: 64 * 1024 * 1024,
+      cwd,
+    });
+    return [null, stdout, stderr];
+  } catch (error) {
+    if (isExecError(error)) {
+      return [error, error.stdout ?? "", error.stderr ?? ""];
+    } else {
+      throw error;
+    }
+  }
 }
 
-export async function checkFileExists(file: string) {
-  return access(file)
-    .then(() => true)
-    .catch(() => false);
+export async function fileExists(file: string) {
+  try {
+    // Check if file is visible to process.  Uses case-insensitive match on Windows.
+    await access(file);
+
+    // Verify exact case match to avoid false positives on case-insensitive file systems (Windows)
+    const dir = dirname(file);
+    const base = basename(file);
+    const entries = await readdir(dir);
+    return entries.includes(base);
+  } catch {
+    return false;
+  }
 }
 
-export async function isDirectory(path: string) {
-  return (await stat(path)).isDirectory();
+export async function readTspConfig(folder: string) {
+  return readFile(join(folder, "tspconfig.yaml"), "utf-8");
 }
 
-export function normalizePath(folder: string, path: PlatformPath = defaultPath) {
-  return path
-    .resolve(folder)
-    .split(path.sep)
-    .join("/")
-    .replace(/^([a-z]):/, (_match, driveLetter) => driveLetter.toUpperCase() + ":");
+export async function getSuppressions(path: string): Promise<Suppression[]> {
+  return getSuppressionsImpl("TypeSpecValidation", path, context);
 }
 
-export async function gitDiffTopSpecFolder(host: TsvHost, folder: string) {
-  const git = host.gitOperation(folder);
-  let topSpecFolder = folder.replace(/(^.*specification\/[^\/]*)(.*)/, "$1");
-  let stdOutput = `Running git diff on folder ${topSpecFolder}`;
-  let gitStatus = await git.status(["--porcelain", topSpecFolder]);
+export function getStructureVersion(relativePath: string): 1 | 2 {
+  return relativePath.includes("data-plane") || relativePath.includes("resource-manager") ? 2 : 1;
+}
 
-  let success = true;
-  let errorOutput: string | undefined;
+export async function gitDiffTopSpecFolder(folder: string, logger: ILogger) {
+  // Neither status nor diff should refresh cached stat data in the index.
+  const git = simpleGit({
+    baseDir: folder,
+    allowEnvironment: ["GIT_OPTIONAL_LOCKS"],
+    config: ["diff.autoRefreshIndex=false"],
+  }).env("GIT_OPTIONAL_LOCKS", "0");
+  const topSpecFolder = resolve(folder).replace(/(^.*specification\/[^/]*)(.*)/, "$1");
+  logger.debug(`Checking generated files in ${topSpecFolder}`);
+  const gitStatus = await git.status(["--porcelain", "--untracked-files=all", "--", topSpecFolder]);
 
-  if (!gitStatus.isClean()) {
-    success = false;
-    errorOutput = JSON.stringify(await git.status());
-    errorOutput += await git.diff();
+  if (gitStatus.isClean()) return { success: true, files: [] };
+
+  if (logger.isDebug()) logger.debug(JSON.stringify(gitStatus));
+  const color = supportsColor() ? "--color=always" : "--color=never";
+  const diffs = [
+    await git.diff([color, "--cached", "--", topSpecFolder]),
+    await git.diff([color, "--", topSpecFolder]),
+  ];
+  if (gitStatus.not_added.length > 0) {
+    const rootGit = simpleGit(await getRootFolder(folder));
+    for (const file of gitStatus.not_added) {
+      diffs.push(await rootGit.diff([color, "--no-index", "--", "/dev/null", file]));
+    }
   }
 
   return {
-    success: success,
-    stdOutput: stdOutput,
-    errorOutput: errorOutput,
+    success: false,
+    files: gitStatus.files.map((file) => file.path),
+    diff: diffs.filter(Boolean).join("\n"),
   };
 }

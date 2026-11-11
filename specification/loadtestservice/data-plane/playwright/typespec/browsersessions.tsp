@@ -1,0 +1,268 @@
+import "@typespec/rest";
+import "./models.tsp";
+import "@typespec/versioning";
+
+using TypeSpec.Versioning;
+using TypeSpec.Rest;
+
+namespace Playwright;
+
+alias BrowserSessionRequiredProperties = {
+  @key("sessionId")
+  @doc("The browser session ID in GUID format.")
+  @minLength(3)
+  @maxLength(36)
+  @pattern("[A-Za-z0-9]+(-[A-Za-z0-9]+)+")
+  @visibility(Lifecycle.Read)
+  id: string;
+
+  @doc("The protocol for the browser session.")
+  @added(Versions.v2026_06_01_preview)
+  protocol: BrowserSessionProtocol = BrowserSessionProtocol.CDP;
+};
+alias BrowserSessionReadRequiredProperties = {
+  @doc("The browser session display name.")
+  @minLength(1)
+  @maxLength(200)
+  displayName: string;
+
+  @doc("The browser session creator's ID.")
+  @visibility(Lifecycle.Read)
+  creatorId: string;
+
+  @doc("The browser session creator's name.")
+  @visibility(Lifecycle.Read)
+  @added(Versions.v2026_06_01_preview)
+  creatorName: string;
+
+  @doc("The browser session status.")
+  @visibility(Lifecycle.Read)
+  status: BrowserSessionStatus;
+
+  @doc("The browser session source details.")
+  @visibility(Lifecycle.Read)
+  source: BrowserSessionSource;
+
+  @doc("The browser session browser type.")
+  browserType: BrowserType;
+
+  @doc("The browser session operating system.")
+  operatingSystem: OS;
+};
+
+@doc("The browser profile configuration for a browser session.")
+model BrowserProfileBrowserSessionConfiguration {
+  @doc("The ID in GUID format of the browser profile used by the browser session. Cannot be changed after creation.")
+  @visibility(Lifecycle.Read, Lifecycle.Create)
+  id?: Azure.Core.uuid;
+
+  @doc("Whether to save the changes in the browser profile done by the browser session. Can be changed after session creation.")
+  @visibility(Lifecycle.Read, Lifecycle.Create, Lifecycle.Update)
+  saveChanges?: boolean;
+}
+
+alias BrowserSessionOptionalProperties = {
+  @doc("The browser session start time in UTC.")
+  @visibility(Lifecycle.Read)
+  startTime?: utcDateTime;
+
+  @doc("The browser session end time in UTC.")
+  @visibility(Lifecycle.Read)
+  endTime?: utcDateTime;
+
+  @doc("The browser session duration in milliseconds.")
+  @visibility(Lifecycle.Read)
+  durationInMilliseconds?: int64;
+
+  @doc("The region where the provisioned browser container is located.")
+  @visibility(Lifecycle.Read)
+  @added(Versions.v2026_06_01_preview)
+  browserRegion?: string;
+
+  @doc("The websocket endpoint that can be used to connect to the browser session.")
+  @visibility(Lifecycle.Read)
+  @added(Versions.v2026_06_01_preview)
+  browserEndpoint?: string;
+
+  @doc("The URL to view the live browser session.")
+  @visibility(Lifecycle.Read)
+  @added(Versions.v2026_06_01_preview)
+  liveViewUri?: string;
+
+  @added(Versions.v2026_10_01_preview)
+  @doc("The artifact configuration and finalized artifacts for the browser session.")
+  @visibility(Lifecycle.Read, Lifecycle.Create, Lifecycle.Update)
+  sessionArtifacts?: BrowserSessionArtifacts;
+
+  @doc("The saved proxy configuration selected at session creation.")
+  @added(Versions.v2026_11_01_preview)
+  @visibility(Lifecycle.Read, Lifecycle.Create)
+  proxyConfig?: ProxyConfigReference;
+
+  @added(Versions.v2026_12_01_preview)
+  @doc("The ID in GUID format of the secret store used by the browser session.")
+  @visibility(Lifecycle.Read, Lifecycle.Create, Lifecycle.Update)
+  secretStoreId?: Azure.Core.uuid;
+
+  @added(Versions.v2026_12_01_preview)
+  @doc("The browser profile configuration for the browser session.")
+  @visibility(Lifecycle.Read, Lifecycle.Create, Lifecycle.Update)
+  browserProfile?: BrowserProfileBrowserSessionConfiguration;
+};
+
+@doc("A reference to a saved proxy configuration in the session's workspace.")
+@added(Versions.v2026_11_01_preview)
+model ProxyConfigReference {
+  @doc("The saved proxy configuration ID in GUID form. Takes precedence over name.")
+  @minLength(3)
+  @maxLength(36)
+  @pattern("[A-Za-z0-9]+(-[A-Za-z0-9]+)+")
+  @visibility(Lifecycle.Read, Lifecycle.Create)
+  id: string;
+
+  @doc("The saved proxy configuration name, resolved ignoring case when id is omitted.")
+  @minLength(3)
+  @maxLength(24)
+  @pattern("^[a-zA-Z0-9-]{3,24}$")
+  @visibility(Lifecycle.Read, Lifecycle.Create)
+  name: string;
+}
+
+@doc("Model of a browser session used for tracking purposes.")
+@resource("browser-sessions")
+@parentResource(Workspace)
+model BrowserSession {
+  ...BrowserSessionRequiredProperties;
+  ...BrowserSessionReadRequiredProperties;
+  ...BrowserSessionOptionalProperties;
+}
+
+@doc("Model of a browser session used for tracking purposes.")
+@resource("browser-sessions")
+@parentResource(Workspace)
+model PatchRequestBrowserSession {
+  ...BrowserSessionRequiredProperties;
+  ...OptionalProperties<BrowserSessionReadRequiredProperties>;
+  ...BrowserSessionOptionalProperties;
+}
+
+@added(Versions.v2026_10_01_preview)
+@doc("The artifact configuration and finalized artifacts for a browser session.")
+model BrowserSessionArtifacts {
+  @doc("The artifact collection enablement status for the browser session. This setting can only disable artifact collection for an individual session; it cannot enable it when artifact collection is disabled at the workspace level.")
+  @visibility(Lifecycle.Read, Lifecycle.Create, Lifecycle.Update)
+  enabled: EnablementStatus = EnablementStatus.Disabled;
+
+  @doc("The status of artifact collection for the browser session.")
+  @visibility(Lifecycle.Read)
+  status?: BrowserSessionArtifactsStatus;
+
+  @doc("The URI used to view the browser session recording.")
+  @visibility(Lifecycle.Read)
+  webUri?: url;
+
+  @doc("The error that occurred while collecting artifacts for the browser session.")
+  @visibility(Lifecycle.Read)
+  error?: Azure.Core.Foundations.Error;
+
+  @doc("The finalized artifacts uploaded for the browser session.")
+  @visibility(Lifecycle.Read)
+  artifacts?: BrowserSessionArtifact[];
+}
+
+@added(Versions.v2026_10_01_preview)
+@doc("The runtime status of artifact collection for a browser session.")
+union BrowserSessionArtifactsStatus {
+  string,
+
+  @doc("Artifact collection has not started.")
+  NotStarted: "NotStarted",
+
+  @doc("Artifact collection is in progress.")
+  InProgress: "InProgress",
+
+  @doc("Artifact collection completed successfully.")
+  Completed: "Completed",
+
+  @doc("Artifact collection failed.")
+  Failed: "Failed",
+}
+
+@added(Versions.v2026_10_01_preview)
+@doc("An artifact uploaded for a browser session.")
+model BrowserSessionArtifact {
+  @doc("The URI of the individual artifact for the browser session.")
+  @visibility(Lifecycle.Read)
+  uri: url;
+
+  @doc("The type of the uploaded artifact.")
+  @visibility(Lifecycle.Read)
+  type: BrowserSessionArtifactType;
+}
+
+@added(Versions.v2026_10_01_preview)
+@doc("The type of an artifact uploaded for a browser session.")
+union BrowserSessionArtifactType {
+  string,
+
+  @doc("A Playwright trace artifact.")
+  Trace: "Trace",
+}
+
+@doc("The browser session source details.")
+model BrowserSessionSource {
+  @doc("The browser session source ID, would be same as runId for test-runs.")
+  @visibility(Lifecycle.Read)
+  id: string;
+
+  @doc("The browser session source type.")
+  @visibility(Lifecycle.Read)
+  type: BrowserSessionSourceType = BrowserSessionSourceType.Others;
+}
+
+@doc("The browser session status.")
+union BrowserSessionStatus {
+  string,
+
+  @doc("The browser session is created.")
+  Created: "Created",
+
+  @doc("The browser session is currently active.")
+  Active: "Active",
+
+  @doc("The browser session has completed.")
+  Completed: "Completed",
+
+  @doc("The browser session has failed.")
+  Failed: "Failed",
+}
+
+@doc("The protocol for the browser session.")
+@added(Versions.v2026_06_01_preview)
+union BrowserSessionProtocol {
+  string,
+
+  @doc("Chrome DevTools Protocol.")
+  CDP: "CDP",
+
+  @doc("Playwright protocol.")
+  Playwright: "Playwright",
+}
+
+@doc("The browser session source type.")
+union BrowserSessionSourceType {
+  string,
+
+  @doc("The browser session source is a Playwright Workspaces test run.")
+  PlaywrightWorkspacesTestRun: "PlaywrightWorkspacesTestRun",
+
+  @doc("The browser session source is a browser automation tool.")
+  BrowserAutomationTool: "BrowserAutomationTool",
+
+  @doc("The browser session source is MCP Server.")
+  @added(Versions.v2026_06_01_preview)
+  Mcp: "Mcp",
+
+  @doc("The browser session source is of other types.")
+  Others: "Others",
+}

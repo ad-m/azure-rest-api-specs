@@ -1,0 +1,24 @@
+import { vi } from "vitest";
+
+export const mockFolder = "specification/foo/Foo";
+
+vi.mock("node:fs/promises", () => ({
+  readFile: vi.fn().mockResolvedValue('{"info": {"x-typespec-generated": true}}'),
+}));
+
+vi.mock("@azure-tools/specs-shared/glob", () => ({
+  globFiles: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("simple-git", () => ({
+  simpleGit: vi.fn().mockReturnValue({
+    env: vi.fn().mockReturnThis(),
+    revparse: vi.fn().mockResolvedValue(""),
+    status: vi.fn().mockResolvedValue({
+      files: [],
+      modified: [],
+      not_added: [],
+      isClean: () => true,
+    }),
+  }),
+}));

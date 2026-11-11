@@ -42,7 +42,6 @@ These settings apply only when `--tag=package-preview-2023-10` is specified on t
 ```yaml $(tag) == 'package-preview-2023-10'
 input-file:
   - preview/2023-10-01-preview/SAPDiscoverySites.json
-  - ../operations/preview/2023-10-01-preview/operations.json
 suppressions:
   - code: DeleteResponseCodes
     from: SAPDiscoverySites.json
@@ -67,7 +66,7 @@ swagger-to-sdk:
   - repo: azure-sdk-for-java
   - repo: azure-sdk-for-go
   - repo: azure-sdk-for-js
-  - repo: azure-sdk-for-net-track2
+  - repo: azure-sdk-for-net
   - repo: azure-resource-manager-schemas
   - repo: azure-cli-extensions
 ```

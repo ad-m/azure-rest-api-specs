@@ -40,6 +40,9 @@
   },
   "tags": [
     {
+      "name": "Operations"
+    },
+    {
       "name": "SAPDiscoverySites"
     },
     {
@@ -50,6 +53,42 @@
     }
   ],
   "paths": {
+    "/providers/Microsoft.Workloads/operations": {
+      "get": {
+        "operationId": "Operations_List",
+        "tags": [
+          "Operations"
+        ],
+        "description": "List the operations for the provider",
+        "parameters": [
+          {
+            "$ref": "../../../../../../common-types/resource-management/v3/types.json#/parameters/ApiVersionParameter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Azure operation completed successfully.",
+            "schema": {
+              "$ref": "../../../../../../common-types/resource-management/v3/types.json#/definitions/OperationListResult"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "../../../../../../common-types/resource-management/v3/types.json#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "x-ms-examples": {
+          "List the operations for the provider.": {
+            "$ref": "./examples/Operations_List.json"
+          }
+        },
+        "x-ms-pageable": {
+          "nextLinkName": "nextLink"
+        }
+      }
+    },
     "/subscriptions/{subscriptionId}/providers/Microsoft.Workloads/sapDiscoverySites": {
       "get": {
         "operationId": "SapDiscoverySites_ListBySubscription",
@@ -1477,11 +1516,7 @@
         "properties": {
           "$ref": "#/definitions/SAPDiscoverySiteProperties",
           "description": "The resource-specific properties for this resource.",
-          "x-ms-client-flatten": true,
-          "x-ms-mutability": [
-            "read",
-            "create"
-          ]
+          "x-ms-client-flatten": true
         },
         "extendedLocation": {
           "$ref": "#/definitions/ExtendedLocation",
@@ -1559,11 +1594,7 @@
         "properties": {
           "$ref": "#/definitions/SAPInstanceProperties",
           "description": "The resource-specific properties for this resource.",
-          "x-ms-client-flatten": true,
-          "x-ms-mutability": [
-            "read",
-            "create"
-          ]
+          "x-ms-client-flatten": true
         }
       },
       "allOf": [
@@ -1762,11 +1793,7 @@
         "properties": {
           "$ref": "#/definitions/ServerInstanceProperties",
           "description": "The resource-specific properties for this resource.",
-          "x-ms-client-flatten": true,
-          "x-ms-mutability": [
-            "read",
-            "create"
-          ]
+          "x-ms-client-flatten": true
         }
       },
       "allOf": [
@@ -1860,24 +1887,6 @@
           "$ref": "#/definitions/ServerInstanceProperties",
           "description": "Server instances properties."
         }
-      }
-    },
-    "Versions": {
-      "type": "string",
-      "description": "The available API versions.",
-      "enum": [
-        "2023-10-01-preview"
-      ],
-      "x-ms-enum": {
-        "name": "Versions",
-        "modelAsString": true,
-        "values": [
-          {
-            "name": "v2023_10_01_preview",
-            "value": "2023-10-01-preview",
-            "description": "The 2023-10-01-preview API version."
-          }
-        ]
       }
     }
   },

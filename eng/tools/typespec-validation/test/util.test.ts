@@ -1,39 +1,51 @@
-import { gitDiffTopSpecFolder, normalizePath } from "../src/utils.js";
+import { mockFolder } from "./mocks.ts";
+import { defaultLogger } from "@azure-tools/specs-shared/logger";
+
 import { strict as assert } from "node:assert";
-import process from "process";
-import path from "path";
-import { describe } from "node:test";
-import { TsvTestHost } from "./tsv-test-host.js";
+import { simpleGit } from "simple-git";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { gitDiffTopSpecFolder } from "../src/utils.ts";
 
 describe("util", function () {
-  describe("normalize", function () {
-    it("should succeed if normalized . and normalized cwd matches", async function () {
-      const dotResult = normalizePath(".");
-      const cwdResult = normalizePath(process.cwd());
-      assert(dotResult === cwdResult);
-    });
+  let revparseMock = vi.fn();
+  let showMock = vi.fn();
+  let statusMock = vi.fn();
 
-    it("should succeed if /foo/bar/ is normalized", async function () {
-      const result = normalizePath("/foo/bar/", path.posix);
-      assert.equal(result, "/foo/bar");
+  beforeEach(() => {
+    revparseMock = vi.fn().mockResolvedValueOnce("abc123").mockResolvedValueOnce("C:/repo\n");
+    showMock = vi.fn().mockResolvedValue("versions: []\n");
+    statusMock = vi.fn().mockResolvedValue({
+      files: [],
+      modified: [],
+      not_added: [],
+      isClean: () => true,
     });
-
-    it("should normalize windows drive letter", async function () {
-      const lowerResult = normalizePath("c:\\foo\\bar", path.win32);
-      const upperResult = normalizePath("C:\\foo\\bar", path.win32);
-      assert.equal(lowerResult, upperResult);
-    });
-
-    it("should distinguish different windows drive letters", async function () {
-      const lowerResult = normalizePath("c:\\foo\\bar", path.win32);
-      const upperResult = normalizePath("d:\\foo\\bar", path.win32);
-      assert.notEqual(lowerResult, upperResult);
-    });
+    vi.mocked(simpleGit).mockReturnValue({
+      env: vi.fn().mockReturnThis(),
+      revparse: revparseMock,
+      show: showMock,
+      status: statusMock,
+    } as never);
   });
+
   describe("gitDiff", function () {
     it("should succeed if git diff produces no output", async function () {
-      const result = await gitDiffTopSpecFolder(new TsvTestHost(), TsvTestHost.folder);
+      const result = await gitDiffTopSpecFolder(mockFolder, defaultLogger);
       assert(result.success);
+    });
+
+    it("uses normalized drive paths when selecting the service folder", async () => {
+      const result = await gitDiffTopSpecFolder(
+        "c:\\repo\\specification\\foo\\Project",
+        defaultLogger,
+      );
+      expect(result.success).toBe(true);
+      expect(statusMock).toHaveBeenCalledExactlyOnceWith([
+        "--porcelain",
+        "--untracked-files=all",
+        "--",
+        "C:/repo/specification/foo",
+      ]);
     });
   });
 });
